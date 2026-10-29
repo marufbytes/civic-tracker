@@ -1,4 +1,4 @@
-﻿import 'server-only';
+import 'server-only';
 import { cookies } from 'next/headers';
 import { SignJWT, jwtVerify } from 'jose';
 import { eq } from 'drizzle-orm';
@@ -49,7 +49,14 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     if (!Number.isInteger(id)) return null;
     const [u] = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (!u) return null;
-    return { id: u.id, name: u.username, role: u.role === 'admin' ? 'admin' : 'user', avatarUrl: u.avatarUrl };
+    const displayName = u.fullName || u.username.charAt(0).toUpperCase() + u.username.slice(1);
+    return {
+      id: u.id,
+      name: u.username,
+      displayName,
+      role: u.role === 'admin' ? 'admin' : 'user',
+      avatarUrl: u.avatarUrl,
+    };
   } catch {
     return null;
   }

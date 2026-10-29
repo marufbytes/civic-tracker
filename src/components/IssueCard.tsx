@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowBigUp, Trash2, MapPin, Flag, AlertTriangle, MessageCircle, CheckCircle2, PlayCircle, RotateCcw, Loader2 } from 'lucide-react';
-import { ALERT_CATEGORIES, asStatus, SEVERITY_BADGE, SPAM_LIMIT, type Comment, type Issue, type SessionUser } from '../lib/constants';
+import { useEffect, useState } from 'react';
+import { ArrowBigUp, Trash2, MapPin, Flag, AlertTriangle, MessageCircle, CheckCircle2, PlayCircle, RotateCcw, Loader2, X } from 'lucide-react';
+import { ALERT_CATEGORIES, asStatus, SEVERITY_BADGE, type Comment, type Issue, type SessionUser } from '../lib/constants';
 import { uploadImage } from '../lib/upload-client';
 import { ImageDropzone } from './ImageDropzone';
 
@@ -78,6 +78,19 @@ export function IssueCard({
     if (ok) setCommentText('');
   };
 
+  useEffect(() => {
+    if (!showComments) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowComments(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [showComments]);
+
+  const chronologicalComments = [...comments].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+
   return (
     <div
       className={`rounded-xl border bg-white p-4 dark:bg-zinc-900 ${
@@ -95,7 +108,7 @@ export function IssueCard({
               <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium dark:bg-zinc-800">{issue.category}</span>
             )}
             <StatusBadge status={issue.status} />
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${SEVERITY_BADGE[issue.severity] ?? SEVERITY_BADGE.Medium}`}>
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${SEVERITY_BADGE[issue.severity] ?? SEVERITY_BADGE.Medium}`}>
               {issue.severity}
             </span>
             {!issue.isApproved && <span className="rounded bg-zinc-200 px-2 py-0.5 text-xs dark:bg-zinc-700">Unapproved</span>}
@@ -103,14 +116,14 @@ export function IssueCard({
           <h3 className="mt-2 text-lg font-semibold">{issue.title}</h3>
           <p className="mt-1 whitespace-pre-line break-words text-sm text-zinc-600 dark:text-zinc-400">{issue.description}</p>
           <p className="mt-2 text-xs text-zinc-500">
-            Reported by <span className="font-medium">{issue.authorName}</span> Â· {new Date(issue.createdAt).toLocaleDateString()}
+            Reported by <span className="font-medium">{issue.authorName}</span> - {new Date(issue.createdAt).toLocaleDateString()}
           </p>
           <button
             onClick={() => onFocus(issue.id)}
             className="mt-1 flex items-center gap-1 text-xs text-zinc-500 hover:text-blue-600"
           >
             <MapPin size={12} />
-            {issue.latitude.toFixed(4)}, {issue.longitude.toFixed(4)}
+            {issue.locationName || `${issue.latitude.toFixed(4)}, ${issue.longitude.toFixed(4)}`}
           </button>
         </div>
         <button
@@ -157,7 +170,7 @@ export function IssueCard({
           disabled={busy}
           className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-orange-600 disabled:opacity-50 dark:hover:bg-zinc-800"
         >
-          <Flag size={12} /> Report as Spam{issue.spamCount > 0 && ` (${issue.spamCount}/${SPAM_LIMIT})`}
+          <Flag size={12} /> Report as Spam ({issue.spamCount})
         </button>
 
         <button
@@ -194,7 +207,7 @@ export function IssueCard({
                 disabled={busy}
                 className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
               >
-                <CheckCircle2 size={12} /> Resolveâ€¦
+                <CheckCircle2 size={12} /> Resolve
               </button>
             )}
             {status !== 'Pending' && (
@@ -223,29 +236,62 @@ export function IssueCard({
       </div>
 
       {showComments && (
-        <div className="mt-3 space-y-2">
-          {comments.length === 0 && <p className="text-xs text-zinc-500">No updates yet. Share one below.</p>}
-          {comments.map((c) => (
-            <div key={c.id} className="rounded-lg bg-zinc-50 p-2 text-sm dark:bg-zinc-800/50">
-              <p>{c.text}</p>
-              <p className="mt-1 text-xs text-zinc-500">
-                {c.authorName} · {new Date(c.createdAt).toLocaleString()}
-              </p>
+        <div
+          className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowComments(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`updates-title-${issue.id}`}
+            className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-xl dark:bg-zinc-900"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800">
+              <h2 id={`updates-title-${issue.id}`} className="font-semibold">
+                Updates ({comments.length})
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowComments(false)}
+                aria-label="Close updates"
+                className="rounded-lg p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              >
+                <X size={18} />
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
+              {chronologicalComments.length === 0 && (
+                <p className="text-sm text-zinc-500">No updates yet. Share one below.</p>
+              )}
+              {chronologicalComments.map((c) => (
+                <div key={c.id} className="rounded-lg bg-zinc-50 p-3 text-sm dark:bg-zinc-800/50">
+                  <p>{c.text}</p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {c.authorName} - {new Date(c.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              ))}
             </div>
-          ))}
-          <div className="flex gap-2">
-            <input
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && postComment()}
-              maxLength={500}
-              placeholder="Share an update, e.g. Police cleared the protest"
-              className="flex-1 rounded-lg border border-zinc-300 bg-white p-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-            />
-            <button onClick={postComment} className="rounded-lg bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700">
-              Post
-            </button>
-          </div>
+            <div className="flex gap-2 border-t border-zinc-200 p-4 dark:border-zinc-800">
+              <input
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void postComment()}
+                maxLength={500}
+                placeholder="Share an update, e.g. Police cleared the protest"
+                className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white p-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+              />
+              <button
+                type="button"
+                onClick={() => void postComment()}
+                disabled={commentText.trim().length < 2}
+                className="rounded-lg bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Post
+              </button>
+            </div>
+          </section>
         </div>
       )}
 
@@ -271,4 +317,3 @@ export function IssueCard({
     </div>
   );
 }
-

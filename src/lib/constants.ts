@@ -1,4 +1,4 @@
-﻿export const CATEGORIES = [
+export const CATEGORIES = [
   'Road',
   'Water',
   'Garbage',
@@ -12,8 +12,6 @@
 // Live alerts get a glowing badge and a special pin on the map
 export const ALERT_CATEGORIES: string[] = ['Road Protest', 'Heavy Traffic Jam', 'Accident / Emergency', 'Waterlogging'];
 
-export const SPAM_LIMIT = 3;
-
 export type Comment = {
   id: number;
   issueId: number;
@@ -22,16 +20,23 @@ export type Comment = {
   createdAt: Date | string;
 };
 export const STATUSES = ['Pending', 'In Progress', 'Resolved'] as const;
-export const SEVERITIES = ['Low', 'Medium', 'Critical'] as const;
+export const SEVERITIES = ['Low', 'Medium', 'High'] as const;
 export type Severity = (typeof SEVERITIES)[number];
 
 export const SEVERITY_BADGE: Record<string, string> = {
-  Low: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-  Medium: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
-  Critical: 'bg-red-600 text-white',
+  Low: 'bg-yellow-100 text-yellow-800 border border-yellow-300',
+  Medium: 'bg-red-100 text-red-700 border border-red-300',
+  High: 'bg-red-600 text-white shadow-[0_0_12px_rgba(220,38,38,0.85)] animate-pulse',
+  Critical: 'bg-red-600 text-white shadow-[0_0_12px_rgba(220,38,38,0.85)] animate-pulse',
 };
 
-export type SessionUser = { id: number; name: string; role: 'user' | 'admin'; avatarUrl: string | null };
+export type SessionUser = {
+  id: number;
+  name: string; // username
+  displayName: string; // full name, or the username with a capital first letter
+  role: 'user' | 'admin';
+  avatarUrl: string | null;
+};
 
 export type Category = (typeof CATEGORIES)[number];
 export type Status = (typeof STATUSES)[number];
@@ -71,12 +76,11 @@ export type Issue = {
   afterImageUrl: string | null;
   spamCount: number;
   isApproved: boolean;
+  locationName: string | null;
 };
 
 export function asStatus(s: string): Status {
   return (STATUSES as readonly string[]).includes(s) ? (s as Status) : 'Pending';
 }
-
-
 
 

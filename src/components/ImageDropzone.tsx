@@ -73,7 +73,7 @@ export function ImageDropzone({
           <>
             <ImagePlus className="mb-1 text-zinc-400" size={24} />
             <span className="text-zinc-500">{label}</span>
-            <span className="text-xs text-zinc-400">JPG, PNG, WebP or GIF Â· max 5 MB</span>
+            <span className="text-xs text-zinc-400">JPG, PNG, WebP or GIF - max 5 MB</span>
           </>
         )}
         {preview && (

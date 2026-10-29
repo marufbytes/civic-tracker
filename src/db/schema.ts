@@ -1,4 +1,4 @@
-﻿import { pgTable, serial, text, timestamp, real, integer, boolean, unique } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, timestamp, real, integer, boolean, unique } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: serial('id').primaryKey(),
@@ -18,6 +18,18 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// One-time codes for sign up and for changing username / email / phone
+export const otpCodes = pgTable('otp_codes', {
+  id: serial('id').primaryKey(),
+  identifier: text('identifier').notNull(),
+  // 'signup' | 'profile'
+  purpose: text('purpose').notNull(),
+  code: text('code').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  // Wrong guesses so far (brute-force protection)
+  attempts: integer('attempts').default(0).notNull(),
+});
+
 export const issues = pgTable('issues', {
   id: serial('id').primaryKey(),
   title: text('title').notNull(),
@@ -31,14 +43,16 @@ export const issues = pgTable('issues', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
   authorName: text('author_name').default('Anonymous').notNull(),
-  // 'Low' | 'Medium' | 'Critical'
+  // 'Low' | 'Medium' | 'High'
   severity: text('severity').default('Medium').notNull(),
   afterImageUrl: text('after_image_url'),
   spamCount: integer('spam_count').default(0).notNull(),
   isApproved: boolean('is_approved').default(true).notNull(),
+  // Readable place name, e.g. "Rampura, Dhaka" (optional)
+  locationName: text('location_name'),
 });
 
-// One row per user per issue, so nobody can flag the same report twice
+// One spam vote per user per issue.
 export const spamFlags = pgTable(
   'spam_flags',
   {
@@ -63,5 +77,3 @@ export const comments = pgTable('comments', {
   text: text('text').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
-
-

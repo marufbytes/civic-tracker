@@ -7,6 +7,7 @@ import { comments, issues, users } from '../db/schema';
 import { getCurrentUser } from '../lib/session';
 import { checkPassword, hashPassword, passwordError } from '../lib/password';
 import { validUploadUrl } from '../lib/uploads';
+import { checkCode, createCode, forgetCode, sendCode } from '../lib/otp';
 
 export type ProfileResult = {
   success: boolean;
@@ -17,30 +18,43 @@ function fail(message: string): ProfileResult {
   return { success: false, message };
 }
 
-export async function updateUsername(newUsername: string): Promise<ProfileResult> {
+/** Normal fields: saved directly, no code needed. */
+export async function updateDetails(formData: FormData): Promise<ProfileResult> {
   const user = await getCurrentUser();
   if (!user) return fail('Please log in first.');
 
-  newUsername = newUsername.trim();
-  if (!/^[a-zA-Z0-9_]{3,30}$/.test(newUsername)) {
-    return fail('Username must be 3-30 letters, numbers or underscores.');
+  const fullName = String(formData.get('fullName') ?? '').trim();
+  const address = String(formData.get('address') ?? '').trim();
+  const occupation = String(formData.get('occupation') ?? '').trim();
+  const gender = String(formData.get('gender') ?? '');
+
+  if (!['', 'Male', 'Female'].includes(gender)) return fail('Gender must be Male or Female.');
+  if (fullName.length > 100 || address.length > 300 || occupation.length > 100) {
+    return fail('One of the fields is too long.');
   }
 
-  // Make sure no other user already has this username
-  const [taken] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(and(eq(users.username, newUsername), ne(users.id, user.id)))
-    .limit(1);
-  if (taken) return fail('That username is already taken.');
-
-  await db.update(users).set({ username: newUsername }).where(eq(users.id, user.id));
-  // Keep the author name on old reports and comments up to date
-  await db.update(issues).set({ authorName: newUsername }).where(eq(issues.userId, user.id));
-  await db.update(comments).set({ authorName: newUsername }).where(eq(comments.userId, user.id));
+  await db
+    .update(users)
+    .set({
+      fullName: fullName || null,
+      address: address || null,
+      occupation: occupation || null,
+      gender: gender || null,
+    })
+    .where(eq(users.id, user.id));
 
   revalidatePath('/', 'layout');
-  return { success: true, message: 'Username updated.' };
+  return { success: true, message: 'Profile details saved.' };
+}
+
+export async function updateAvatar(avatarUrl: string): Promise<ProfileResult> {
+  const user = await getCurrentUser();
+  if (!user) return fail('Please log in first.');
+  if (!(await validUploadUrl(avatarUrl))) return fail('Uploaded photo is invalid. Please try again.');
+
+  await db.update(users).set({ avatarUrl }).where(eq(users.id, user.id));
+  revalidatePath('/', 'layout');
+  return { success: true, message: 'Profile picture updated.' };
 }
 
 export async function updatePassword(currentPassword: string, newPassword: string): Promise<ProfileResult> {
@@ -64,47 +78,61 @@ export async function updatePassword(currentPassword: string, newPassword: strin
   return { success: true, message: 'Password updated.' };
 }
 
-export async function updateAvatar(avatarUrl: string): Promise<ProfileResult> {
-  const user = await getCurrentUser();
-  if (!user) return fail('Please log in first.');
-  if (!(await validUploadUrl(avatarUrl))) return fail('Uploaded photo is invalid. Please try again.');
-
-  await db.update(users).set({ avatarUrl }).where(eq(users.id, user.id));
-  revalidatePath('/', 'layout');
-  return { success: true, message: 'Profile picture updated.' };
-}
-
-export async function updateDetails(formData: FormData): Promise<ProfileResult> {
+/** Sensitive fields step 1: email a code to the user's CURRENT email address. */
+export async function sendProfileCode(): Promise<ProfileResult> {
   const user = await getCurrentUser();
   if (!user) return fail('Please log in first.');
 
-  const fullName = String(formData.get('fullName') ?? '').trim();
-  const address = String(formData.get('address') ?? '').trim();
-  const phone = String(formData.get('phone') ?? '').replace(/[\s()-]/g, '');
-  const email = String(formData.get('email') ?? '').trim().toLowerCase();
-  const occupation = String(formData.get('occupation') ?? '').trim();
-  const gender = String(formData.get('gender') ?? '');
+  const [row] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
 
-  if (!/^\+?\d{7,15}$/.test(phone)) return fail('Enter a valid phone number.');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter a valid email address.');
-  if (!['', 'Male', 'Female', 'Other'].includes(gender)) return fail('Invalid gender.');
-  if (fullName.length > 100 || address.length > 300 || occupation.length > 100) {
-    return fail('One of the fields is too long.');
+  const created = await createCode(row.email, 'profile');
+  if ('error' in created) return fail(created.error);
+
+  const emailed = await sendCode(row.email, created.code);
+  if (!emailed) {
+    await forgetCode(row.email, 'profile');
+    return fail('We could not send the email. Please try again later.');
   }
-
-  await db
-    .update(users)
-    .set({
-      fullName: fullName || null,
-      address: address || null,
-      phone,
-      email,
-      occupation: occupation || null,
-      gender: gender || null,
-    })
-    .where(eq(users.id, user.id));
-
-  revalidatePath('/profile');
-  return { success: true, message: 'Profile details saved.' };
+  return { success: true, message: `We sent a 6-digit code to ${row.email}. Check your inbox.` };
 }
 
+/** Sensitive fields step 2: check the code, then update username, email and phone. */
+export async function updateContactInfo(
+  username: string,
+  email: string,
+  phone: string,
+  code: string
+): Promise<ProfileResult> {
+  const user = await getCurrentUser();
+  if (!user) return fail('Please log in first.');
+
+  username = username.trim();
+  email = email.trim().toLowerCase();
+  phone = phone.replace(/[\s()-]/g, '');
+
+  if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
+    return fail('Username must be 3-30 letters, numbers or underscores.');
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter a valid email address.');
+  if (!/^\+?\d{7,15}$/.test(phone)) return fail('Enter a valid phone number.');
+
+  // The code was sent to the current email address, so check it against that
+  const [row] = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+  const codeProblem = await checkCode(row.email, 'profile', code);
+  if (codeProblem) return fail(codeProblem);
+
+  const [taken] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.username, username), ne(users.id, user.id)))
+    .limit(1);
+  if (taken) return fail('That username is already taken.');
+
+  await db.update(users).set({ username, email, phone }).where(eq(users.id, user.id));
+  // Keep the author name on old reports and comments up to date
+  await db.update(issues).set({ authorName: username }).where(eq(issues.userId, user.id));
+  await db.update(comments).set({ authorName: username }).where(eq(comments.userId, user.id));
+
+  revalidatePath('/', 'layout');
+  return { success: true, message: 'Account details updated.' };
+}

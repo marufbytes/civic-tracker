@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useRef, useState, useTransition } from 'react';
 import { Crosshair, Loader2, Send } from 'lucide-react';
@@ -16,6 +16,8 @@ export function IssueForm({
   longitude,
   onLocationChange,
   onGpsFound,
+  locationName,
+  onLocationNameChange,
   user,
   onRequireAuth,
 }: {
@@ -24,6 +26,8 @@ export function IssueForm({
   onLocationChange: (lat: string, lng: string) => void;
   // Called when the browser GPS finds the user, so the map can fly to that spot
   onGpsFound: (lat: number, lng: number) => void;
+  locationName: string;
+  onLocationNameChange: (name: string) => void;
   user: SessionUser | null;
   onRequireAuth: () => void;
 }) {
@@ -47,7 +51,7 @@ export function IssueForm({
         setLocating(false);
         toast('error', 'Could not get your location. Check browser permissions.');
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
   };
 
@@ -70,6 +74,7 @@ export function IssueForm({
         toast('success', res.message);
         setErrors({});
         setFile(null);
+        onLocationNameChange('');
         formRef.current?.reset();
       } else {
         setErrors(res.fieldErrors ?? {});
@@ -86,7 +91,7 @@ export function IssueForm({
       <form ref={formRef} action={onSubmit} className="space-y-4">
         <div>
           <label className="mb-1 block text-sm">Title</label>
-          <input name="title" required maxLength={120} placeholder="e.g., Huge pothole on Main St" className={input} />
+          <input name="title" required maxLength={120} placeholder="e.g., Huge pothole near Mirpur 10 roundabout" className={input} />
           {err('title')}
         </div>
 
@@ -147,6 +152,19 @@ export function IssueForm({
         </div>
 
         <div>
+          <label className="mb-1 block text-sm">Location / Area Name (optional)</label>
+          <input
+            name="locationName"
+            value={locationName}
+            onChange={(e) => onLocationNameChange(e.target.value)}
+            maxLength={150}
+            placeholder="e.g., Kandirpar, Cumilla or Mirpur 10, Dhaka"
+            className={input}
+          />
+          {err('locationName')}
+        </div>
+
+        <div>
           <label className="mb-1 block text-sm">Photo (required)</label>
           <ImageDropzone file={file} onChange={setFile} />
           {err('image')}
@@ -169,7 +187,7 @@ export function IssueForm({
             required
             rows={3}
             maxLength={2000}
-            placeholder="Describe the problem..."
+            placeholder="e.g., Waterlogging after rain is blocking rickshaws and buses..."
             className={input}
           />
           {err('description')}

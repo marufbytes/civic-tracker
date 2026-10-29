@@ -4,7 +4,7 @@ import { db } from './lib/db';
 import { comments, issues, spamFlags } from '../db/schema';
 import { revalidatePath } from 'next/cache';
 import { and, eq, sql } from 'drizzle-orm';
-import { CATEGORIES, SEVERITIES, SPAM_LIMIT, STATUSES } from '../lib/constants';
+import { CATEGORIES, SEVERITIES, STATUSES } from '../lib/constants';
 import { getCurrentUser } from '../lib/session';
 import { validUploadUrl } from '../lib/uploads';
 
@@ -33,6 +33,7 @@ export async function createIssue(formData: FormData): Promise<ActionResult> {
   const latitude = parseFloat(String(formData.get('latitude') ?? ''));
   const longitude = parseFloat(String(formData.get('longitude') ?? ''));
   const imageUrl = String(formData.get('imageUrl') ?? '').trim();
+  const locationName = String(formData.get('locationName') ?? '').trim();
 
   const errors: Record<string, string> = {};
   if (title.length < 3 || title.length > 120) errors.title = 'Title must be 3-120 characters.';
@@ -44,6 +45,7 @@ export async function createIssue(formData: FormData): Promise<ActionResult> {
     errors.latitude = 'Latitude must be between -90 and 90.';
   if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180)
     errors.longitude = 'Longitude must be between -180 and 180.';
+  if (locationName.length > 150) errors.locationName = 'Location name is too long (150 characters max).';
   if (!imageUrl) errors.image = 'A photo is required to submit a report.';
   else if (!(await validUploadUrl(imageUrl))) errors.image = 'Uploaded photo is invalid. Please upload it again.';
   if (Object.keys(errors).length > 0) return fail('Please fix the highlighted fields.', errors);
@@ -57,6 +59,7 @@ export async function createIssue(formData: FormData): Promise<ActionResult> {
       latitude,
       longitude,
       imageUrl,
+      locationName: locationName || null,
       userId: user.id,
       authorName: user.name,
     });
@@ -88,7 +91,7 @@ export async function upvoteIssue(id: number): Promise<ActionResult> {
   return { success: true, message: 'Upvoted!' };
 }
 
-/** Each user can flag a report once. At SPAM_LIMIT flags the report is hidden for review. */
+/** Each user can cast one spam vote per report. Votes never hide the report. */
 export async function flagSpam(id: number): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return LOGIN_REQUIRED;
@@ -107,10 +110,7 @@ export async function flagSpam(id: number): Promise<ActionResult> {
       .set({ spamCount: sql`${issues.spamCount} + 1` })
       .where(eq(issues.id, id))
       .returning({ spamCount: issues.spamCount });
-
-    if (issue.spamCount >= SPAM_LIMIT) {
-      await db.update(issues).set({ isApproved: false }).where(eq(issues.id, id));
-    }
+    if (!issue) return fail('Issue not found.');
   } catch (e) {
     console.error('flagSpam failed', e);
     return fail('Could not report this issue.');
@@ -120,14 +120,13 @@ export async function flagSpam(id: number): Promise<ActionResult> {
   return { success: true, message: 'Thanks, the report was flagged as spam.' };
 }
 
-/** Admin only. Puts a hidden (spam-flagged) report back on the public list. */
+/** Admin only. Makes a previously unapproved report public again. */
 export async function approveIssue(id: number): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return LOGIN_REQUIRED;
   if (user.role !== 'admin') return fail('Only admins can approve reports.');
 
-  await db.update(issues).set({ isApproved: true, spamCount: 0 }).where(eq(issues.id, id));
-  await db.delete(spamFlags).where(eq(spamFlags.issueId, id));
+  await db.update(issues).set({ isApproved: true }).where(eq(issues.id, id));
   revalidatePath('/');
   return { success: true, message: 'Report approved.' };
 }
@@ -196,5 +195,4 @@ export async function deleteIssue(id: number): Promise<ActionResult> {
   revalidatePath('/');
   return { success: true, message: 'Issue deleted.' };
 }
-
 
