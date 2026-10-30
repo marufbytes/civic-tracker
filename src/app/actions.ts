@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { and, eq, sql } from 'drizzle-orm';
 import { CATEGORIES, SEVERITIES, STATUSES } from '../lib/constants';
 import { getCurrentUser } from '../lib/session';
-import { validUploadUrl } from '../lib/uploads';
+import { validImageDataUrl } from '../lib/uploads';
 
 export type ActionResult = {
   success: boolean;
@@ -47,7 +47,7 @@ export async function createIssue(formData: FormData): Promise<ActionResult> {
     errors.longitude = 'Longitude must be between -180 and 180.';
   if (locationName.length > 150) errors.locationName = 'Location name is too long (150 characters max).';
   if (!imageUrl) errors.image = 'A photo is required to submit a report.';
-  else if (!(await validUploadUrl(imageUrl))) errors.image = 'Uploaded photo is invalid. Please upload it again.';
+  else if (!validImageDataUrl(imageUrl)) errors.image = 'Uploaded photo is invalid. Please upload it again.';
   if (Object.keys(errors).length > 0) return fail('Please fix the highlighted fields.', errors);
 
   try {
@@ -167,7 +167,7 @@ export async function updateIssueStatus(
     if (newStatus === 'Resolved') {
       after = afterImageUrl || current.afterImageUrl;
       if (!after) return fail('Upload an "After" photo as proof before resolving.');
-      if (afterImageUrl && !(await validUploadUrl(afterImageUrl))) return fail('Uploaded photo is invalid.');
+      if (afterImageUrl && !validImageDataUrl(afterImageUrl)) return fail('Uploaded photo is invalid.');
     }
 
     await db.update(issues).set({ status: newStatus, afterImageUrl: after }).where(eq(issues.id, id));
@@ -195,4 +195,3 @@ export async function deleteIssue(id: number): Promise<ActionResult> {
   revalidatePath('/');
   return { success: true, message: 'Issue deleted.' };
 }
-

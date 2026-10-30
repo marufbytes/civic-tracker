@@ -6,7 +6,7 @@ import { db } from './lib/db';
 import { comments, issues, users } from '../db/schema';
 import { getCurrentUser } from '../lib/session';
 import { checkPassword, hashPassword, passwordError } from '../lib/password';
-import { validUploadUrl } from '../lib/uploads';
+import { validImageDataUrl } from '../lib/uploads';
 import { checkCode, createCode, forgetCode, sendCode } from '../lib/otp';
 
 export type ProfileResult = {
@@ -50,7 +50,7 @@ export async function updateDetails(formData: FormData): Promise<ProfileResult> 
 export async function updateAvatar(avatarUrl: string): Promise<ProfileResult> {
   const user = await getCurrentUser();
   if (!user) return fail('Please log in first.');
-  if (!(await validUploadUrl(avatarUrl))) return fail('Uploaded photo is invalid. Please try again.');
+  if (!validImageDataUrl(avatarUrl)) return fail('Uploaded photo is invalid. Please try again.');
 
   await db.update(users).set({ avatarUrl }).where(eq(users.id, user.id));
   revalidatePath('/', 'layout');

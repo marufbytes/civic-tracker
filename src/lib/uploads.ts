@@ -1,11 +1,8 @@
-﻿import 'server-only';
-import { randomUUID } from 'node:crypto';
-import { access, mkdir, writeFile } from 'node:fs/promises';
+import 'server-only';
 import path from 'node:path';
 
 export const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-export const UPLOAD_URL_RE = /^\/uploads\/[a-f0-9-]{36}\.(jpg|png|webp|gif)$/;
+export const MAX_STORED_IMAGE_BYTES = 600 * 1024;
 
 /** Detect image type from magic bytes (never trust client MIME / filename). */
 function sniff(buf: Buffer): 'jpg' | 'png' | 'webp' | 'gif' | null {
@@ -20,25 +17,19 @@ function sniff(buf: Buffer): 'jpg' | 'png' | 'webp' | 'gif' | null {
 
 export async function saveImage(file: File): Promise<{ url: string } | { error: string }> {
   if (file.size === 0) return { error: 'The file is empty.' };
-  if (file.size > MAX_IMAGE_BYTES) return { error: 'Image must be 5 MB or smaller.' };
+  if (file.size > MAX_STORED_IMAGE_BYTES) return { error: 'Compressed image must be 600 KB or smaller.' };
   const buf = Buffer.from(await file.arrayBuffer());
   const ext = sniff(buf);
-  if (!ext) return { error: 'Only JPG, PNG, WebP or GIF images are allowed.' };
-  await mkdir(UPLOAD_DIR, { recursive: true });
-  const name = `${randomUUID()}.${ext}`;
-  await writeFile(path.join(UPLOAD_DIR, name), buf);
-  return { url: `/uploads/${name}` };
+  if (ext !== 'jpg') return { error: 'Image could not be processed. Please choose another photo.' };
+  return { url: `data:image/jpeg;base64,${buf.toString('base64')}` };
 }
 
+/** Only accept bounded JPEG data URLs matching the format produced by the upload endpoint. */
+export function validImageDataUrl(dataUrl: string): boolean {
+  const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl);
+  const maxEncodedLength = Math.ceil(MAX_STORED_IMAGE_BYTES / 3) * 4;
+  if (!match || match[1].length > maxEncodedLength || match[1].length % 4 !== 0) return false;
 
-/** Only accept URLs produced by our own upload endpoint, and make sure the file exists. */
-export async function validUploadUrl(url: string): Promise<boolean> {
-  if (!UPLOAD_URL_RE.test(url)) return false;
-  try {
-    await access(path.join(UPLOAD_DIR, path.basename(url)));
-    return true;
-  } catch {
-    return false;
-  }
+  const image = Buffer.from(match[1], 'base64');
+  return image.length > 0 && image.length <= MAX_STORED_IMAGE_BYTES && sniff(image) === 'jpg';
 }
-

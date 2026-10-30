@@ -2,8 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { UPLOAD_DIR } from '../../../lib/uploads';
 
-// Serves files saved at runtime into public/uploads (Next only statically serves
-// files that existed at server start, so this guarantees new uploads are reachable).
+// Serves legacy local uploads. New uploads are stored as data URLs in the database.
 const TYPES: Record<string, string> = {
   jpg: 'image/jpeg',
   png: 'image/png',
@@ -28,4 +27,3 @@ export async function GET(_req: Request, ctx: { params: Promise<{ name: string }
     return new Response('Not found', { status: 404 });
   }
 }
-

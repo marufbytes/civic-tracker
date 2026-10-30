@@ -21,10 +21,12 @@ const inputClass =
 
 // Render this component only while the modal is open. It starts fresh every time it opens.
 export function AuthModal({
+  isOpen,
   initialMode = 'login',
   onClose,
   reason,
 }: {
+  isOpen: boolean;
   initialMode?: 'login' | 'signup';
   onClose: () => void;
   reason?: string;
@@ -107,6 +109,8 @@ export function AuthModal({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div
       className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
@@ -123,7 +127,7 @@ export function AuthModal({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-3 top-3 rounded-full p-1 hover:bg-white/20"
+            className="absolute right-3 top-3 cursor-pointer rounded-full p-1 hover:bg-white/20"
           >
             <X size={18} />
           </button>
@@ -220,7 +224,7 @@ export function AuthModal({
           <button
             type="submit"
             disabled={pending || (step === 'code' && code.length !== 6)}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
           >
             {pending && <Loader2 size={16} className="animate-spin" />}
             {mode === 'login' ? 'Log in' : step === 'form' ? 'Send Verification Code' : 'Verify & Create Account'}
@@ -233,7 +237,7 @@ export function AuthModal({
                 setStep('form');
                 setError(null);
               }}
-              className="flex w-full items-center justify-center gap-1 text-sm text-zinc-500 hover:underline"
+              className="flex w-full cursor-pointer items-center justify-center gap-1 text-sm text-zinc-500 hover:underline"
             >
               <ArrowLeft size={14} /> Go back and edit my details
             </button>
@@ -241,7 +245,7 @@ export function AuthModal({
         </form>
 
         <div className="border-t border-zinc-200 px-6 py-4 text-center text-sm dark:border-zinc-800">
-          <button onClick={switchMode} className="font-medium text-blue-600 hover:underline">
+          <button onClick={switchMode} className="cursor-pointer font-medium text-blue-600 hover:underline">
             {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
           </button>
         </div>

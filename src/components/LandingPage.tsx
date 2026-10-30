@@ -1,12 +1,28 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRight, Map as MapIcon, MapPin, MapPinned, Radio } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  Droplets,
+  Map as MapIcon,
+  MapPin,
+  MapPinned,
+  Pause,
+  Play,
+  Radio,
+  TrafficCone,
+  Trash2,
+  Users,
+} from 'lucide-react';
+import type { ReactNode } from 'react';
 import { upvoteIssue } from '../app/actions';
-import { asStatus, STATUS_BADGE, type Issue, type SessionUser } from '../lib/constants';
+import type { Issue, SessionUser } from '../lib/constants';
 import { AuthModal } from './AuthModal';
-import { AboutSection, OverviewSection, type HomeStats } from './HomeSections';
+import { AboutSection, HowItWorksSection, OverviewSection, type HomeStats } from './HomeSections';
 import { MapView } from './MapView';
 import { Navbar } from './Navbar';
 import { ToastProvider, useToast } from './Toast';
@@ -21,6 +37,113 @@ const mapCategories = [
   'Garbage',
   'Streetlight',
 ] as const;
+
+type HeroAlert = {
+  category: string;
+  title: string;
+  location: string;
+};
+
+const sampleAlerts: HeroAlert[] = [
+  { category: 'Traffic', title: 'Traffic moving slowly near a busy junction', location: 'Farmgate, Dhaka' },
+  { category: 'Waterlogging', title: 'Residents reporting water on the road', location: 'Kandirpar, Cumilla' },
+  { category: 'Road', title: 'Community update: road repairs underway', location: 'GEC Circle, Chattogram' },
+];
+
+function BangladeshMap() {
+  return (
+    <div className="relative mx-auto flex aspect-square w-full max-w-[360px] items-center justify-center">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/bd-map.svg"
+        alt="Map of Bangladesh"
+        className="pointer-events-none h-full w-full select-none object-contain scale-110 opacity-50 invert brightness-200 drop-shadow-[0_0_16px_rgba(16,185,129,0.5)]"
+      />
+    </div>
+  );
+}
+
+function categoryIcon(category: string): ReactNode {
+  if (/water|flood/i.test(category)) return <Droplets size={18} />;
+  if (/traffic|road/i.test(category)) return <TrafficCone size={18} />;
+  if (/garbage/i.test(category)) return <Trash2 size={18} />;
+  return <AlertTriangle size={18} />;
+}
+
+function LiveAlertTicker({ issues }: { issues: Issue[] }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const alerts = useMemo<HeroAlert[]>(
+    () =>
+      issues.length
+        ? issues.slice(0, 5).map((issue) => ({
+            category: issue.category,
+            title: issue.title,
+            location: issue.locationName || `${issue.latitude.toFixed(3)}, ${issue.longitude.toFixed(3)}`,
+          }))
+        : sampleAlerts,
+    [issues]
+  );
+  const alert = alerts[activeIndex % alerts.length];
+  useEffect(() => {
+    if (paused || alerts.length < 2) return;
+    const timer = window.setInterval(() => {
+      setActiveIndex((index) => (index + 1) % alerts.length);
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [alerts.length, paused]);
+
+  const showPrevious = () => setActiveIndex((index) => (index - 1 + alerts.length) % alerts.length);
+  const showNext = () => setActiveIndex((index) => (index + 1) % alerts.length);
+
+  return (
+    <div className="rounded-2xl border border-white/15 bg-green-950/45 p-4 shadow-lg backdrop-blur">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-100">
+          <Radio size={14} className="animate-pulse text-red-300" /> Live Pulse
+        </p>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={showPrevious}
+            aria-label="Previous alert"
+            className="cursor-pointer rounded-md p-1.5 text-white/70 hover:bg-white/10 hover:text-white"
+          >
+            <ArrowLeft size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaused((value) => !value)}
+            aria-label={paused ? 'Resume alert feed' : 'Pause alert feed'}
+            className="cursor-pointer rounded-md p-1.5 text-white/70 hover:bg-white/10 hover:text-white"
+          >
+            {paused ? <Play size={14} /> : <Pause size={14} />}
+          </button>
+          <button
+            type="button"
+            onClick={showNext}
+            aria-label="Next alert"
+            className="cursor-pointer rounded-md p-1.5 text-white/70 hover:bg-white/10 hover:text-white"
+          >
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      </div>
+      <div key={`${activeIndex}-${alert.title}`} className="mt-3 flex min-h-16 items-start gap-3 animate-[hero-alert-enter_450ms_ease-out]">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500/15 text-amber-300">
+          {categoryIcon(alert.category)}
+        </span>
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-200">{alert.category}</p>
+          <p className="mt-0.5 line-clamp-2 text-sm font-medium leading-snug text-white">{alert.title}</p>
+          <p className="mt-1 flex items-center gap-1 text-xs text-green-100/70">
+            <MapPin size={12} /> {alert.location}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function LandingPageContent({
   user,
@@ -43,8 +166,6 @@ function LandingPageContent({
     () => (category === 'All' ? issues : issues.filter((issue) => issue.category === category)),
     [category, issues]
   );
-  const recentIssues = issues.slice(0, 3);
-
   const reportIssue = () => {
     if (user) router.push('/dashboard');
     else setAuthMode('login');
@@ -77,58 +198,75 @@ function LandingPageContent({
       <section className="relative overflow-hidden bg-gradient-to-br from-green-950 via-green-800 to-emerald-600 text-white">
         <div className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-red-600/50 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 -left-20 h-80 w-80 rounded-full bg-emerald-300/20 blur-3xl" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:py-28 lg:grid-cols-[1.2fr_0.8fr]">
-          <div>
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200">
-              <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
-              </span>
-              <Radio className="h-3.5 w-3.5 animate-pulse text-red-300" aria-hidden="true" />
-              <span>Live Civic &amp; Traffic Alerts in Bangladesh</span>
-            </div>
-            <h1 className="max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl">
-              Make your community safer, one report at a time.
-            </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-green-50">
-              Report potholes, garbage, waterlogging, traffic jams and emergencies in your area. Follow every report
-              from the first pin to the final fix.
-            </p>
+        <div className="hero-grid-pattern pointer-events-none absolute inset-0 opacity-60" />
+        <div className="relative z-10 mx-auto max-w-[92%] px-4 pt-6 pb-10 sm:pt-8 sm:pb-10 lg:max-w-[96%]">
+          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-12 lg:gap-10">
+            <div className="lg:col-span-7">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200">
+                <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                </span>
+                <Radio className="h-3.5 w-3.5 animate-pulse text-red-300" aria-hidden="true" />
+                <span>Live Civic &amp; Traffic Alerts in Bangladesh</span>
+              </div>
+              <h1 className="max-w-3xl text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl">
+                Make your community safer, one report at a time.
+              </h1>
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-green-50">
+                Report potholes, garbage, waterlogging, traffic jams and emergencies in your area. Follow every report
+                from the first pin to the final fix.
+              </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <button
-                onClick={() => document.getElementById('overview')?.scrollIntoView({ behavior: 'smooth' })}
-                className="flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-green-900 shadow-lg transition hover:bg-green-50"
-              >
-                <MapIcon size={18} /> Explore Live Map
-              </button>
-              <button
-                onClick={reportIssue}
-                className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-6 py-3 font-semibold text-white shadow-lg transition hover:bg-red-700"
-              >
-                <MapPinned size={18} /> Report an Issue <ArrowRight size={16} />
-              </button>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <button
+                  onClick={() => document.getElementById('overview')?.scrollIntoView({ behavior: 'smooth' })}
+                  className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-semibold text-green-900 shadow-lg transition hover:bg-green-50"
+                >
+                  <MapIcon size={18} /> Explore Live Map
+                </button>
+                <button
+                  onClick={reportIssue}
+                  className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-red-600 px-6 py-3 font-semibold text-white shadow-lg transition hover:bg-red-700"
+                >
+                  <MapPinned size={18} /> Report an Issue <ArrowRight size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="relative flex min-h-[360px] items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] sm:min-h-[430px] lg:col-span-5">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-300/[0.08] via-transparent to-amber-300/[0.08]" />
+              <BangladeshMap />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { value: stats.active, label: 'Active reports', detail: 'Visible to everyone' },
-              { value: stats.solved, label: 'Issues resolved', detail: 'Community-led progress' },
-              { value: stats.citizens, label: 'Citizens involved', detail: 'Across Bangladesh' },
-              { value: issues.length, label: 'Live on the map', detail: 'Approved reports' },
-            ].map((stat) => (
-              <div key={stat.label} className="rounded-2xl border border-white/15 bg-white/10 p-5 shadow-lg backdrop-blur">
-                <p className="text-3xl font-extrabold sm:text-4xl">{stat.value.toLocaleString()}</p>
-                <p className="mt-2 font-semibold">{stat.label}</p>
-                <p className="mt-1 text-sm text-green-100">{stat.detail}</p>
-              </div>
-            ))}
+          <div className="mt-8 grid gap-4 lg:grid-cols-[1fr_0.62fr]">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { icon: AlertTriangle, value: stats.active, label: 'Active reports', detail: 'Visible to everyone' },
+                { icon: CheckCircle2, value: stats.solved, label: 'Issues resolved', detail: 'Community-led progress' },
+                { icon: Users, value: stats.citizens, label: 'Citizens involved', detail: 'Across Bangladesh' },
+                { icon: MapPin, value: issues.length, label: 'Live on the map', detail: 'Approved reports' },
+              ].map(({ icon: Icon, value, label, detail }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => document.getElementById('overview')?.scrollIntoView({ behavior: 'smooth' })}
+                  className="cursor-pointer rounded-2xl border border-white/15 bg-white/10 p-4 text-left shadow-lg backdrop-blur transition-all hover:-translate-y-1 hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                >
+                  <Icon size={19} className="mb-3 text-amber-200" />
+                  <p className="text-2xl font-extrabold sm:text-3xl">{value.toLocaleString()}</p>
+                  <p className="mt-1 text-sm font-semibold">{label}</p>
+                  <p className="mt-1 text-xs text-green-100">{detail}</p>
+                </button>
+              ))}
+            </div>
+            <LiveAlertTicker issues={issues} />
           </div>
         </div>
       </section>
 
-      <AboutSection />
+      <HowItWorksSection />
       <OverviewSection stats={stats}>
         <div className="mt-10">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -142,7 +280,7 @@ function LandingPageContent({
                 type="button"
                 aria-pressed={category === item}
                 onClick={() => setCategory(item)}
-                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm font-medium transition ${
                   category === item
                     ? 'border-green-700 bg-green-700 text-white'
                     : 'border-zinc-300 bg-white hover:border-green-600 dark:border-zinc-700 dark:bg-zinc-900'
@@ -165,68 +303,23 @@ function LandingPageContent({
         </div>
       </OverviewSection>
 
-      <section className="bg-white py-16 dark:bg-zinc-950">
-        <div className="mx-auto max-w-7xl px-4">
-          <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wider text-green-700 dark:text-green-400">From the community</p>
-              <h2 className="mt-2 text-3xl font-bold">Recent Reports Across Bangladesh</h2>
-            </div>
-            <button onClick={() => document.getElementById('overview')?.scrollIntoView({ behavior: 'smooth' })} className="font-semibold text-green-700 hover:text-green-800 dark:text-green-400">
-              View live map <ArrowRight className="ml-1 inline" size={16} />
-            </button>
-          </div>
-          {recentIssues.length ? (
-            <div className="grid gap-6 md:grid-cols-3">
-              {recentIssues.map((issue) => {
-                const status = asStatus(issue.status);
-                return (
-                  <article key={issue.id} className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                    {issue.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={issue.imageUrl} alt={issue.title} className="h-48 w-full object-cover" />
-                    ) : (
-                      <div className="flex h-48 items-center justify-center bg-zinc-100 text-zinc-400 dark:bg-zinc-800">
-                        <MapPinned size={36} />
-                      </div>
-                    )}
-                    <div className="p-5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 dark:bg-green-950 dark:text-green-300">{issue.category}</span>
-                        <span className={`rounded-full px-3 py-1 text-xs font-medium ${STATUS_BADGE[status]}`}>{status}</span>
-                      </div>
-                      <h3 className="mt-3 text-lg font-bold">{issue.title}</h3>
-                      <p className="mt-2 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">{issue.description}</p>
-                      <p className="mt-4 flex items-center gap-1.5 text-sm text-zinc-500">
-                        <MapPin size={15} />
-                        {issue.locationName || `${issue.latitude.toFixed(4)}, ${issue.longitude.toFixed(4)}`}
-                      </p>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="rounded-2xl border border-dashed border-zinc-300 p-8 text-center text-zinc-500 dark:border-zinc-700">
-              No approved reports yet. Be the first to report an issue.
-            </p>
-          )}
-        </div>
-      </section>
-
+      <AboutSection />
       <footer className="border-t border-zinc-200 bg-zinc-50 py-8 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 text-sm text-zinc-600 sm:flex-row dark:text-zinc-400">
-          <span className="font-semibold text-zinc-900 dark:text-zinc-100">Civic Issue Tracker</span>
-          <span>Built for a safer, more connected Bangladesh.</span>
-          <a href="#overview" className="font-medium text-green-700 hover:underline dark:text-green-400">Explore the live map</a>
+        <div className="mx-auto grid max-w-7xl gap-3 px-4 text-center text-sm text-zinc-600 sm:grid-cols-3 sm:items-center sm:px-6 sm:text-left lg:px-8 dark:text-zinc-400">
+          {/* <a href="mailto:marufahammed496@gmail.com" className="font-medium text-green-700 hover:underline dark:text-green-400">
+            Contact Us: marufahammed496@gmail.com
+          </a> */}
+          <p className="sm:text-left">Contact Us: marufahammed496@gmail.com</p>
+          <p className="sm:text-center">© 2026 Civic Issue Tracker. All rights reserved.</p>
+          <p className="sm:text-right">Built for a safer, more connected Bangladesh.</p>
         </div>
       </footer>
-      {authMode !== null && (
-        <AuthModal
-          initialMode={authMode || 'login'}
-          onClose={() => setAuthMode(null)}
-        />
-      )}
+      <AuthModal
+        key={authMode ?? 'closed'}
+        isOpen={authMode !== null}
+        initialMode={authMode ?? 'login'}
+        onClose={() => setAuthMode(null)}
+      />
     </>
   );
 }

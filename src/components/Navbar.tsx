@@ -33,7 +33,7 @@ export function ThemeToggle() {
     <button
       onClick={toggle}
       aria-label="Toggle theme"
-      className="rounded-lg border border-zinc-300 p-2 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+      className="cursor-pointer rounded-lg border border-zinc-300 p-2 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
     >
       {dark ? <Sun size={18} /> : <Moon size={18} />}
     </button>
@@ -79,7 +79,7 @@ export function Navbar({
   return (
     <header className="sticky top-0 z-[1000] border-b border-zinc-200 bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-        <Link href="/" className="flex items-center gap-2 text-lg font-bold">
+        <Link href="/" className="flex cursor-pointer items-center gap-2 text-lg font-bold">
           <Landmark className="text-blue-600" />
           <span className="hidden sm:inline">Civic Issue Tracker</span>
         </Link>
@@ -89,7 +89,7 @@ export function Navbar({
             <Link
               key={link.href}
               href={link.href}
-              className={`rounded-lg px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+              className={`cursor-pointer rounded-lg px-3 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
                 pathname === link.href ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300' : ''
               }`}
             >
@@ -118,7 +118,7 @@ export function Navbar({
               <button
                 onClick={doLogout}
                 disabled={pending}
-                className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                className="flex cursor-pointer items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
               >
                 <LogOut size={14} /> Logout
               </button>
@@ -127,13 +127,13 @@ export function Navbar({
             <>
               <button
                 onClick={onLogin}
-                className="flex items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                className="flex cursor-pointer items-center gap-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
               >
                 <LogIn size={14} /> Log In
               </button>
               <button
                 onClick={onSignUp}
-                className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                className="flex cursor-pointer items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
               >
                 <UserPlus size={14} /> Sign Up
               </button>

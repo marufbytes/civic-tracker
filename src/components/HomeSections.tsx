@@ -60,8 +60,16 @@ export function AboutSection() {
             in the open.
           </p>
         </div>
+      </div>
+    </section>
+  );
+}
 
-        <h3 className="mt-14 text-center text-2xl font-bold">How It Works</h3>
+export function HowItWorksSection() {
+  return (
+    <section className="bg-white py-16 dark:bg-zinc-950">
+      <div className="mx-auto max-w-5xl px-4">
+        <h2 className="text-center text-2xl font-bold">How It Works</h2>
         <div className="mt-8 grid gap-6 md:grid-cols-3">
           {steps.map(({ icon: Icon, title, text }) => (
             <div
