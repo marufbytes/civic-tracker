@@ -5,14 +5,18 @@ import nodemailer from 'nodemailer';
 import { db } from '../app/lib/db';
 import { otpCodes } from '../db/schema';
 
-const CODE_LIFETIME = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_CODE_LIFETIME = 5 * 60 * 1000; // 5 minutes
 const RESEND_WAIT = 30 * 1000; // 30 seconds
 const MAX_WRONG_TRIES = 5;
 
-export type Purpose = 'signup' | 'profile';
+export type Purpose = 'signup' | 'profile' | 'password_reset';
 
 /** Saves a new 6-digit code. Returns the code, or an error message. */
-export async function createCode(identifier: string, purpose: Purpose): Promise<{ code: string } | { error: string }> {
+export async function createCode(
+  identifier: string,
+  purpose: Purpose,
+  lifetime = DEFAULT_CODE_LIFETIME
+): Promise<{ code: string } | { error: string }> {
   const [latest] = await db
     .select()
     .from(otpCodes)
@@ -20,7 +24,7 @@ export async function createCode(identifier: string, purpose: Purpose): Promise<
     .orderBy(desc(otpCodes.expiresAt))
     .limit(1);
 
-  const age = latest ? CODE_LIFETIME - (latest.expiresAt.getTime() - Date.now()) : Infinity;
+  const age = latest ? lifetime - (latest.expiresAt.getTime() - Date.now()) : Infinity;
   if (age < RESEND_WAIT) return { error: 'Please wait a few seconds before asking for another code.' };
 
   const code = String(randomInt(0, 1000000)).padStart(6, '0');
@@ -29,13 +33,18 @@ export async function createCode(identifier: string, purpose: Purpose): Promise<
     identifier,
     purpose,
     code,
-    expiresAt: new Date(Date.now() + CODE_LIFETIME),
+    expiresAt: new Date(Date.now() + lifetime),
   });
   return { code };
 }
 
 /** Checks a code the user typed. Returns null when it is correct, otherwise an error message. */
-export async function checkCode(identifier: string, purpose: Purpose, code: string): Promise<string | null> {
+export async function checkCode(
+  identifier: string,
+  purpose: Purpose,
+  code: string,
+  consume = true
+): Promise<string | null> {
   const [saved] = await db
     .select()
     .from(otpCodes)
@@ -57,12 +66,16 @@ export async function checkCode(identifier: string, purpose: Purpose, code: stri
     return 'That code is not correct.';
   }
 
-  await db.delete(otpCodes).where(eq(otpCodes.id, saved.id));
+  if (consume) await db.delete(otpCodes).where(eq(otpCodes.id, saved.id));
   return null;
 }
 
 /** Emails the code through Gmail SMTP. Returns true if the email was sent. */
-export async function sendCode(to: string, code: string): Promise<boolean> {
+export async function sendCode(
+  to: string,
+  code: string,
+  options: { subject?: string; expiresInMinutes?: number } = {}
+): Promise<boolean> {
   const smtpUser = process.env.SMTP_EMAIL;
   const smtpPass = process.env.SMTP_PASSWORD;
   if (!smtpUser || !smtpPass) {
@@ -75,8 +88,8 @@ export async function sendCode(to: string, code: string): Promise<boolean> {
     await transporter.sendMail({
       from: `"Civic Issue Tracker" <${smtpUser}>`,
       to,
-      subject: 'Your verification code',
-      text: `Your verification code is ${code}. It expires in 5 minutes.`,
+      subject: options.subject ?? 'Your verification code',
+      text: `Your ${options.subject ? 'password reset code' : 'verification code'} is ${code}. It expires in ${options.expiresInMinutes ?? 5} minutes.`,
     });
     return true;
   } catch (error) {
@@ -87,6 +100,8 @@ export async function sendCode(to: string, code: string): Promise<boolean> {
 
 
 /** Removes saved codes, e.g. when the email could not be sent. */
-export async function forgetCode(identifier: string, purpose: Purpose) {
-  await db.delete(otpCodes).where(and(eq(otpCodes.identifier, identifier), eq(otpCodes.purpose, purpose)));
+export async function forgetCode(identifier: string, purpose: Purpose, code?: string) {
+  const conditions = [eq(otpCodes.identifier, identifier), eq(otpCodes.purpose, purpose)];
+  if (code !== undefined) conditions.push(eq(otpCodes.code, code));
+  await db.delete(otpCodes).where(and(...conditions));
 }

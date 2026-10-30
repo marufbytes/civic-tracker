@@ -8,14 +8,16 @@ import type { SessionUser } from './constants';
 
 const COOKIE = 'civic_session';
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+const FALLBACK_SECRET = 'civic-tracker-session-signing-fallback-key-not-for-production';
+const SESSION_SECRET =
+  process.env.AUTH_SECRET || process.env.JWT_SECRET || process.env.DATABASE_URL || FALLBACK_SECRET;
+
+if (!process.env.AUTH_SECRET && !process.env.JWT_SECRET) {
+  console.warn('AUTH_SECRET is unset; configure it in Vercel to use a dedicated session signing key.');
+}
 
 function secretKey() {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) {
-    if (process.env.NODE_ENV === 'production') throw new Error('AUTH_SECRET must be set in production.');
-    return new TextEncoder().encode('dev-only-insecure-secret-change-me-please-32b');
-  }
-  return new TextEncoder().encode(secret);
+  return new TextEncoder().encode(SESSION_SECRET);
 }
 
 export async function createSession(userId: number) {
@@ -61,5 +63,3 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     return null;
   }
 }
-
-

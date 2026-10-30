@@ -3,7 +3,14 @@
 import { useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, KeyRound, Landmark, Loader2, Lock, Mail, Phone, User, X } from 'lucide-react';
-import { logIn, sendSignUpCode, verifySignUp, type AuthResult } from '../app/auth-actions';
+import {
+  logIn,
+  resetPasswordWithOtp,
+  sendPasswordResetOtp,
+  sendSignUpCode,
+  verifySignUp,
+  type AuthResult,
+} from '../app/auth-actions';
 import { useToast } from './Toast';
 
 // An input box with an icon on the left and a nice focus ring
@@ -35,10 +42,11 @@ export function AuthModal({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
+  const [mode, setMode] = useState<'login' | 'signup' | 'reset'>(initialMode);
   const [step, setStep] = useState<'form' | 'code'>('form');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -61,6 +69,16 @@ export function AuthModal({
     setStep('form');
     setError(null);
     setNotice(null);
+  };
+
+  const backToLogin = () => {
+    setMode('login');
+    setStep('form');
+    setError(null);
+    setNotice(null);
+    setCode('');
+    setPassword('');
+    setConfirmPassword('');
   };
 
   // Runs a server action, shows an error if it failed, and tells us when it worked
@@ -91,11 +109,35 @@ export function AuthModal({
     setCode('');
   };
 
+  const finishPasswordReset = () => {
+    setMode('login');
+    setStep('form');
+    setUsername(email);
+    setPassword('');
+    setConfirmPassword('');
+    setCode('');
+    setNotice('Password reset successfully! Please log in.');
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (mode === 'login') {
       run(() => logIn(makeFormData()), finishLogin);
+    } else if (mode === 'reset' && step === 'form') {
+      run(
+        () => sendPasswordResetOtp(email),
+        (res) => {
+          setStep('code');
+          toast('success', res.message, 6);
+        }
+      );
+    } else if (mode === 'reset') {
+      if (password !== confirmPassword) {
+        setError('The passwords do not match.');
+        return;
+      }
+      run(() => resetPasswordWithOtp(email, code, password), finishPasswordReset);
     } else if (step === 'form') {
       run(
         () => sendSignUpCode(makeFormData()),
@@ -135,22 +177,49 @@ export function AuthModal({
             <Landmark size={22} />
           </div>
           <h2 className="text-2xl font-bold">
-            {mode === 'login' ? 'Welcome back' : step === 'form' ? 'Join your community' : 'Check your email'}
+            {mode === 'login'
+              ? 'Welcome back'
+              : mode === 'reset'
+                ? step === 'form'
+                  ? 'Reset your password'
+                  : 'Choose a new password'
+                : step === 'form'
+                  ? 'Join your community'
+                  : 'Check your email'}
           </h2>
           <p className="text-sm text-blue-100">
-            {reason ?? (mode === 'login' ? 'Log in to report, upvote and comment.' : 'Help make your city better.')}
+            {mode === 'reset'
+              ? step === 'form'
+                ? 'We will email you a code to verify your account.'
+                : 'Enter the code we emailed you and choose a new password.'
+              : reason ?? (mode === 'login' ? 'Log in to report, upvote and comment.' : 'Help make your city better.')}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 p-6">
-          {step === 'form' && (
+          {mode === 'reset' && step === 'form' && (
+            <Field icon={<Mail size={16} />}>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Registered email address"
+                autoComplete="email"
+                required
+                className={inputClass}
+              />
+            </Field>
+          )}
+
+          {mode !== 'reset' && step === 'form' && (
             <>
               <Field icon={<User size={16} />}>
                 <input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Username"
+                  placeholder="Username or email"
                   required
+                  autoComplete="username"
                   className={inputClass}
                 />
               </Field>
@@ -164,6 +233,26 @@ export function AuthModal({
                   className={inputClass}
                 />
               </Field>
+              {mode === 'login' && (
+                <div className="-mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('reset');
+                      setStep('form');
+                      setEmail(username.includes('@') ? username.trim() : '');
+                      setCode('');
+                      setPassword('');
+                      setConfirmPassword('');
+                      setError(null);
+                      setNotice(null);
+                    }}
+                    className="cursor-pointer text-sm text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
               {mode === 'signup' && (
                 <>
                   <p className="-mt-2 text-xs text-zinc-500">At least 6 characters, with 1 uppercase letter.</p>
@@ -195,8 +284,9 @@ export function AuthModal({
           {step === 'code' && (
             <>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                We sent a 6-digit code to <span className="font-medium">{email}</span>. Enter it below to create your
-                account.
+                {mode === 'reset'
+                  ? <>We sent a 6-digit reset code to <span className="font-medium">{email}</span>.</>
+                  : <>We sent a 6-digit code to <span className="font-medium">{email}</span>. Enter it below to create your account.</>}
               </p>
               <Field icon={<KeyRound size={16} />}>
                 <input
@@ -208,6 +298,33 @@ export function AuthModal({
                   className={`${inputClass} font-mono tracking-widest`}
                 />
               </Field>
+              {mode === 'reset' && (
+                <>
+                  <Field icon={<Lock size={16} />}>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="New password"
+                      autoComplete="new-password"
+                      required
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field icon={<Lock size={16} />}>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      autoComplete="new-password"
+                      required
+                      className={inputClass}
+                    />
+                  </Field>
+                  <p className="-mt-2 text-xs text-zinc-500">At least 6 characters, with 1 uppercase letter.</p>
+                </>
+              )}
             </>
           )}
 
@@ -227,10 +344,28 @@ export function AuthModal({
             className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
           >
             {pending && <Loader2 size={16} className="animate-spin" />}
-            {mode === 'login' ? 'Log in' : step === 'form' ? 'Send Verification Code' : 'Verify & Create Account'}
+            {mode === 'login'
+              ? 'Log in'
+              : mode === 'reset'
+                ? step === 'form'
+                  ? 'Send Reset Code'
+                  : 'Reset Password'
+                : step === 'form'
+                  ? 'Send Verification Code'
+                  : 'Verify & Create Account'}
           </button>
 
-          {step === 'code' && (
+          {mode === 'reset' && (
+            <button
+              type="button"
+              onClick={backToLogin}
+              className="flex w-full cursor-pointer items-center justify-center gap-1 text-sm text-zinc-500 hover:underline"
+            >
+              <ArrowLeft size={14} /> Back to log in
+            </button>
+          )}
+
+          {mode !== 'reset' && step === 'code' && (
             <button
               type="button"
               onClick={() => {
@@ -244,11 +379,13 @@ export function AuthModal({
           )}
         </form>
 
-        <div className="border-t border-zinc-200 px-6 py-4 text-center text-sm dark:border-zinc-800">
-          <button onClick={switchMode} className="cursor-pointer font-medium text-blue-600 hover:underline">
-            {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
-          </button>
-        </div>
+        {mode !== 'reset' && (
+          <div className="border-t border-zinc-200 px-6 py-4 text-center text-sm dark:border-zinc-800">
+            <button onClick={switchMode} className="cursor-pointer font-medium text-blue-600 hover:underline">
+              {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

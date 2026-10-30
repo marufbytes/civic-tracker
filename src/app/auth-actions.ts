@@ -1,6 +1,6 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { eq, or, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { db } from './lib/db';
 import { users } from '../db/schema';
@@ -8,6 +8,8 @@ import { createSession, destroySession } from '../lib/session';
 import { checkPassword, hashPassword, passwordError } from '../lib/password';
 import { ensureAdmin } from '../lib/admin-seed';
 import { checkCode, createCode, forgetCode, sendCode } from '../lib/otp';
+
+const PASSWORD_RESET_LIFETIME = 10 * 60 * 1000;
 
 export type AuthResult = {
   success: boolean;
@@ -100,14 +102,27 @@ export async function verifySignUp(formData: FormData): Promise<AuthResult> {
 }
 
 export async function logIn(formData: FormData): Promise<AuthResult> {
-  const username = String(formData.get('username') ?? '').trim();
+  const identifier = String(formData.get('username') ?? '').trim().toLowerCase();
   const password = String(formData.get('password') ?? '');
+  if (!identifier || !password) return fail('Enter your username or email and password.');
 
   try {
     await ensureAdmin();
-    const [user] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    const [user] = await db
+      .select({
+        id: users.id,
+        passwordHash: users.passwordHash,
+      })
+      .from(users)
+      .where(
+        or(
+          sql`lower(${users.username}) = ${identifier}`,
+          sql`lower(${users.email}) = ${identifier}`
+        )
+      )
+      .limit(1);
     if (!user || !checkPassword(password, user.passwordHash)) {
-      return fail('Wrong username or password.');
+      return fail('Wrong username/email or password.');
     }
     await createSession(user.id);
   } catch (e) {
@@ -117,6 +132,71 @@ export async function logIn(formData: FormData): Promise<AuthResult> {
 
   revalidatePath('/');
   return { success: true, message: 'Logged in successfully!' };
+}
+
+export async function sendPasswordResetOtp(email: string): Promise<AuthResult> {
+  email = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter a valid email address.');
+
+  try {
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(sql`lower(${users.email}) = ${email}`)
+      .limit(1);
+    if (!user) return fail('No account was found with that email address.');
+
+    const created = await createCode(email, 'password_reset', PASSWORD_RESET_LIFETIME);
+    if ('error' in created) return fail(created.error);
+
+    const emailed = await sendCode(email, created.code, {
+      subject: 'Your password reset code',
+      expiresInMinutes: PASSWORD_RESET_LIFETIME / 60_000,
+    });
+    if (!emailed) {
+      await forgetCode(email, 'password_reset', created.code);
+      return fail('We could not send the reset code. Please try again later.');
+    }
+
+    return { success: true, message: `We sent a reset code to ${email}. It expires in 10 minutes.` };
+  } catch (e) {
+    console.error('sendPasswordResetOtp failed', e);
+    return fail('Could not send the reset code. Please try again.');
+  }
+}
+
+export async function resetPasswordWithOtp(email: string, otp: string, newPassword: string): Promise<AuthResult> {
+  email = email.trim().toLowerCase();
+  otp = otp.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter a valid email address.');
+  if (!/^\d{6}$/.test(otp)) return fail('Enter the 6-digit reset code.');
+  const passwordProblem = passwordError(newPassword);
+  if (passwordProblem) return fail(passwordProblem);
+
+  try {
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(sql`lower(${users.email}) = ${email}`)
+      .limit(1);
+    if (!user) return fail('No account was found with that email address.');
+
+    const codeProblem = await checkCode(email, 'password_reset', otp, false);
+    if (codeProblem) return fail(codeProblem);
+
+    const [updated] = await db
+      .update(users)
+      .set({ passwordHash: hashPassword(newPassword) })
+      .where(eq(users.id, user.id))
+      .returning({ id: users.id });
+    if (!updated) return fail('Could not update your password. Please try again.');
+
+    await forgetCode(email, 'password_reset', otp);
+    return { success: true, message: 'Password reset successfully! Please log in.' };
+  } catch (e) {
+    console.error('resetPasswordWithOtp failed', e);
+    return fail('Could not reset your password. Please try again.');
+  }
 }
 
 export async function logout(): Promise<AuthResult> {
