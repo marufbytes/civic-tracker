@@ -1,62 +1,122 @@
-# 🏛️ Civic Issue Tracker BD
+# Civic Issue Tracker BD
 
-A full-stack, crowdsourced platform built to report, track, and resolve local civic and traffic issues across Bangladesh in real time.
+A full-stack web application built to report, map, and track local civic problems and traffic disruptions across Bangladesh in real time.
 
-[![Live Demo](https://img.shields.io/badge/Demo-Vercel-black?style=flat&logo=vercel)](https://civic-tracker-bd.vercel.app/)
-[![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-blue?style=flat&logo=github)](https://github.com/marufbytes/civic-tracker)
-
----
-
-## 📌 Project Overview
-
-Everyday civic issues like potholes, open garbage dumps, sudden waterlogging, and extreme traffic jams often go unreported or get lost in unstructured social media posts. Civic Issue Tracker bridges the gap between citizens and local authorities by providing a centralized, transparent platform where problems can be mapped, upvoted, and monitored from report to resolution.
-
-### Motivation & Interest
-Built out of personal interest and a practical daily need. The goal was to build a clean civic-tech utility that gives communities a voice and provides transparent, data-driven visibility into neighborhood problems without administrative roadblocks.
+Live Site: https://civic-tracker-bd.vercel.app/
+GitHub: https://github.com/marufbytes/civic-tracker
 
 ---
 
-## ✨ Key Features
+## Overview
 
-- **Interactive Live Map:** Pin exact problem spots across Bangladesh or grab current GPS coordinates.
-- **Category & Severity Filters:** Filter reports by road condition, waterlogging, heavy traffic, garbage, streetlights, or emergency incidents.
-- **Proof-of-Work Media:** Upload issue photos and view official "After" photos once issues are resolved.
-- **Serverless Media Handling:** Photos are compressed directly in the browser and stored as Base64 JPEG data URLs in the database, avoiding local disk writes for seamless cloud deployments.
-- **Community Engagement:** Upvote critical neighborhood issues and comment to share live updates.
-- **Secure Authentication:** Account creation and password recovery verified via 6-digit email OTPs.
-- **Role-Based Moderation:** Admin dashboard to review incoming reports, update statuses, and clean spam.
-- **Theme Support:** Fully responsive dark and light modes.
+Broken roads, waterlogged streets, unmanaged garbage, and sudden traffic bottlenecks are part of daily life in our cities. Most of these reports stay buried in private group posts or social media feeds without any status tracking or accountability. 
+
+Civic Issue Tracker provides a simple platform where citizens can drop a pin on a live map, upload photos, and track the progress of an issue from pending to resolved.
+
+I built this project out of personal interest and a practical daily need. The focus was on building a fast, lightweight tool tailored to local issues across Bangladesh, handling serverless photo uploads cleanly without extra paid storage, and keeping the interface direct and usable.
 
 ---
 
-## 🛠️ Tech Stack
+## What It Does
 
-- **Framework:** Next.js (App Router, Server Actions)
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS, Lucide Icons
-- **Database & ORM:** PostgreSQL (Neon Serverless), Drizzle ORM
-- **Maps:** Leaflet, React-Leaflet, OpenStreetMap
-- **Authentication & Email:** Custom Auth, Nodemailer (SMTP OTP)
-- **Deployment:** Vercel
+- Interactive Map: Pin an issue anywhere in Bangladesh or grab current coordinates with device GPS.
+- Issue Categories: Tag reports under Road, Waterlogging, Heavy Traffic, Road Protest, Accident/Emergency, Garbage, or Streetlight.
+- Photo Verification: Upload snapshots of the issue and check "After" resolution photos once fixed.
+- Cloud-Safe Image Storage: Images are compressed in the browser and saved as Base64 strings directly in the database, avoiding local file writes on Vercel.
+- Community Upvoting: Upvote local posts so urgent neighborhood problems get immediate visibility.
+- Email Verification: User registration and password reset are verified through 6-digit email OTP codes.
+- Admin Dashboard: Review incoming reports, approve valid posts, update resolution states, and flag spam.
+- Dark and Light Interface: Built-in theme toggling across all screens.
 
 ---
 
-## 📂 Project Structure
+## Tech Stack
+
+- Framework: Next.js (App Router, Server Actions)
+- Language: TypeScript
+- UI: Tailwind CSS, Lucide Icons
+- Database: Neon Serverless PostgreSQL
+- ORM: Drizzle ORM
+- Map Engine: Leaflet, React-Leaflet, OpenStreetMap
+- Auth & Email: Custom Session Auth, Nodemailer (SMTP OTP)
+- Hosting: Vercel
+
+---
+
+## Project Structure
 
 ```text
 civic-tracker/
-├── public/                  # Static assets and icons
+├── public/                  # Map assets and static icons
 ├── src/
-│   ├── app/                 # Next.js App Router, API routes & Server Actions
-│   │   ├── api/             # Backend API handlers
-│   │   ├── dashboard/       # Moderation and issue management views
-│   │   ├── actions.ts       # Core issue report server actions
+│   ├── app/                 # App Router pages, APIs, and Server Actions
+│   │   ├── api/             # API endpoints
+│   │   ├── dashboard/       # Moderation and issue status views
+│   │   ├── actions.ts       # Issue reporting server actions
 │   │   └── auth-actions.ts  # Auth, OTP, and password reset actions
-│   ├── components/          # UI components (LandingPage, AuthModal, Map views)
-│   ├── db/                  # Drizzle ORM schema and database client
-│   └── lib/                 # Client utilities and upload helpers
+│   ├── components/          # UI components (LandingPage, Modals, Map)
+│   ├── db/                  # Drizzle ORM schema and database setup
+│   └── lib/                 # Utility functions and image compression helpers
 ├── drizzle.config.ts        # Drizzle ORM configuration
 ├── next.config.ts           # Next.js configuration
 ├── package.json             # Dependencies and scripts
-├── tailwind.config.ts       # Tailwind CSS configuration
-└── tsconfig.json            # TypeScript configuration
+└── tailwind.config.ts       # Tailwind CSS configuration
+
+Local Setup
+Requirements
+Node.js (v18 or higher)
+
+npm or pnpm
+
+A free PostgreSQL database instance (Neon.tech or local)
+
+1. Clone the repository
+Bash
+git clone [https://github.com/marufbytes/civic-tracker.git](https://github.com/marufbytes/civic-tracker.git)
+cd civic-tracker
+2. Install dependencies
+Bash
+npm install
+3. Add environment variables
+Create a .env file in the root folder:
+
+Code snippet
+DATABASE_URL="postgresql://username:password@host/neondb?sslmode=require"
+SMTP_EMAIL="your-email@gmail.com"
+SMTP_PASSWORD="your-app-password"
+JWT_SECRET="your-secret-key"
+4. Push database tables
+Run Drizzle to create all tables in your database:
+
+Bash
+npx drizzle-kit push
+5. Run the dev server
+Bash
+npm run dev
+Open http://localhost:3000 in your browser.
+
+Deployment Notes
+This project is deployed on Vercel. Because Vercel serverless functions have a read-only filesystem, file uploads do not use fs.writeFile. Instead, client-side images are compressed to JPEG and stored directly as Base64 data strings in the database text column.
+
+To deploy your own copy:
+
+Push your repository to GitHub.
+
+Import the project on Vercel.
+
+Add DATABASE_URL, SMTP_EMAIL, SMTP_PASSWORD, and JWT_SECRET in Vercel Environment Variables.
+
+Hit Deploy.
+
+Author
+Maruf Ahammed
+
+Department of Computer Science and Engineering
+
+American International University-Bangladesh (AIUB)
+
+Email: marufahammed496@gmail.com
+
+Portfolio: https://marufahammed.me/index.html
+
+GitHub: https://github.com/marufbytes
